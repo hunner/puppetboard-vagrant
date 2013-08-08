@@ -33,6 +33,15 @@ class pdb {
   }
   class { 'puppetdb::server': }
   class { 'puppetdb::database::postgresql': }
+  ini_setting { 'report-ttl':
+    ensure  => present,
+    path    => '/etc/puppetdb/conf.d/database.ini',
+    setting => 'report-ttl',
+    value   => '0s',
+    section => 'database',
+    require => Package['puppetdb'],
+    notify  => Service['puppetdb'],
+  }
 }
 
 class puppetboard {
