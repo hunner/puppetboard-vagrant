@@ -4,9 +4,10 @@ node default {
   stage { 'before': before => Stage['main'], }
   class { 'repos': stage => 'before', }
   -> class { 'pdb': }
-  -> class { 'puppetboard': }
+  -> class { 'pb': }
 }
 
+# Add repo for PuppetDB packages
 class repos {
   include apt
   apt::source { 'puppetlabs_ubuntu':
@@ -17,7 +18,10 @@ class repos {
   }
 }
 
+
+# Class to install and configure PuppetDB
 class pdb {
+  # Extra resources for vagrant
   host { $::fqdn:
     ip           => '127.0.0.1',
     host_aliases => $::hostname,
@@ -31,59 +35,48 @@ class pdb {
       Class['puppetdb::database::postgresql']
     ]
   }
-  class { 'puppetdb::server': }
-  class { 'puppetdb::database::postgresql': }
-  ini_setting { 'report-ttl':
-    ensure  => present,
-    path    => '/etc/puppetdb/conf.d/database.ini',
-    setting => 'report-ttl',
-    value   => '0s',
-    section => 'database',
-    require => Package['puppetdb'],
-    notify  => Service['puppetdb'],
+
+  # Helper to import a DB after vagrant upd
+  exec { 'import db':
+    command => 'psql puppetdb < /vagrant/puppetdb.sql',
+    onlyif  => '/usr/bin/test -f /vagrant/puppetdb.sql',
+    user    => 'postgres',
+    require => Class['puppetdb::database::postgresql'],
   }
+
+  # PuppetDB configuration settings
+  class { 'puppetdb::server':
+    report_ttl => '0s',
+  }
+  class { 'puppetdb::database::postgresql': }
 }
 
-class puppetboard {
-  package { ['git','python-pip','dtach']:
+
+# Class to install and configure puppetboard
+class pb {
+  # Git for vcsrepo to clone puppetboard
+  package { 'git':
     ensure => present,
   }
-  package { ['pytz','requests']:
-    ensure   => present,
-    provider => 'pip',
-    before   => Exec['install puppetboard'],
+
+  # Python for running puppetboard
+  class { 'python':
+    pip        => true,
+    virtualenv => true,
   }
-  vcsrepo { "/root/puppetboard":
-    ensure   => present,
-    provider => 'git',
-    source   => 'https://github.com/nedap/puppetboard',
-    before   => Exec['install puppetboard'],
+
+  # Apache for serving puppetboard
+  class { 'apache':
+    mpm_module => 'prefork',
   }
-  exec { 'install puppetboard':
-    command => 'pip install -r /root/puppetboard/requirements.txt',
-    unless  => 'pip freeze|grep Flask',
+  class { 'apache::mod::wsgi': }
+
+  # Puppetboard and an apache vhost
+  class { 'puppetboard':
+    unresponsive => '999999',
+    experimental => 'True',
   }
-  file_line { 'puppetboard listen':
-    path    => '/root/puppetboard/dev.py',
-    line    => "    app.run('0.0.0.0')",
-    match   => '    app.run\(\'([\d\.]+)\'\)',
-    notify  => Service['puppetboard'],
-    require => Exec['install puppetboard'],
-  }
-  file_line { 'puppetboard experimental':
-    path    => '/root/puppetboard/puppetboard/default_settings.py',
-    line    => 'PUPPETDB_EXPERIMENTAL=True',
-    match   => 'PUPPETDB_EXPERIMENTAL=(True|False)',
-    notify  => Service['puppetboard'],
-    require => Exec['install puppetboard'],
-  }
-  service { 'puppetboard':
-    ensure     => running,
-    start      => 'dtach -n /root/puppetboard/dtach python /root/puppetboard/dev.py',
-    stop       => 'pkill python',
-    provider   => 'base',
-    hasstatus  => false,
-    hasrestart => false,
-    require    => Package['dtach'],
+  class { 'puppetboard::apache::vhost':
+    vhost_name => 'puppetboard.lan',
   }
 }

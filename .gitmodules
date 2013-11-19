@@ -19,3 +19,12 @@
 [submodule "modules/vcsrepo"]
 	path = modules/vcsrepo
 	url = https://github.com/puppetlabs/puppetlabs-vcsrepo.git
+[submodule "modules/puppetboard"]
+	path = modules/puppetboard
+	url = https://github.com/nibalizer/puppet-module-puppetboard.git
+[submodule "modules/apache"]
+	path = modules/apache
+	url = https://github.com/puppetlabs/puppetlabs-apache.git
+[submodule "modules/python"]
+	path = modules/python
+	url = https://github.com/stankevich/puppet-python
